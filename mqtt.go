@@ -8,10 +8,21 @@ import (
 )
 
 func mqttSubscribe(env *Env, timeout time.Duration) {
+	//Callback
+	msgRcvd := func(client mqtt.Client, message mqtt.Message) {
+		fmt.Println("mqtt got message")
+		wakeMac(env.MacAddr)
+	}
+
 	opts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%v:%v", env.MqttHost, env.MqttPort))
 	opts.SetUsername(env.MqttUser)
 	opts.SetPassword(env.MqttPassword)
 	opts.SetPingTimeout(timeout * time.Second)
+	opts.OnConnect = func(c mqtt.Client) {
+		if token := c.Subscribe(env.WakeTopic, 0, msgRcvd); token.Wait() && token.Error() != nil {
+			panic(token.Error().Error())
+		}
+	}
 	opts.SetKeepAlive(timeout * time.Second)
 	opts.SetAutoReconnect(true)
 	opts.SetMaxReconnectInterval(timeout * time.Second)
@@ -22,18 +33,8 @@ func mqttSubscribe(env *Env, timeout time.Duration) {
 		fmt.Println("...... mqtt reconnecting ......")
 	})
 
-	//Callback
-	msgRcvd := func(client mqtt.Client, message mqtt.Message) {
-		fmt.Println("mqtt got message")
-		wakeMac(env.MacAddr)
-	}
-
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error().Error())
-	}
-
-	if token := client.Subscribe(env.WakeTopic, 0, msgRcvd); token.Wait() && token.Error() != nil {
 		panic(token.Error().Error())
 	}
 }
